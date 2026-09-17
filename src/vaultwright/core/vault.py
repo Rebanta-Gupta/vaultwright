@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -50,26 +51,48 @@ def is_vault(path: Path) -> bool:
     return (path / ".obsidian").is_dir()
 
 
-def is_ignored(rel_path: Path) -> bool:
-    """True if any part of the relative path is a folder we skip."""
-    return any(part in IGNORED_DIRS for part in rel_path.parts)
+def is_ignored(rel_path: Path, ignore: Iterable[str] = ()) -> bool:
+    """True if this vault-relative folder should be skipped.
+
+    A single-segment entry ("Templates") matches that folder at any depth;
+    a multi-segment entry ("Cold Emails/Fall 2026") matches that exact
+    folder and everything under it.
+    """
+    parts = rel_path.parts
+    if any(part in IGNORED_DIRS for part in parts):
+        return True
+
+    as_posix = rel_path.as_posix()
+    for entry in ignore:
+        entry = entry.strip().strip("/")
+        if not entry:
+            continue
+        if "/" in entry:
+            if as_posix == entry or as_posix.startswith(f"{entry}/"):
+                return True
+        elif entry in parts:
+            return True
+    return False
 
 
-def iter_notes(root: Path, base: Path | None = None) -> list[Note]:
-    """Every .md file under ``base`` (default: ``root``), skipping IGNORED_DIRS.
+def iter_notes(
+    root: Path, base: Path | None = None, ignore: Iterable[str] = ()
+) -> list[Note]:
+    """Every .md file under ``base`` (default: ``root``), skipping ignored folders.
 
     ``rel_path`` on each note stays relative to ``root``, so callers always
     speak in vault-relative paths even when scanning a single subfolder.
     """
     root = root.resolve()
     base = root if base is None else base.resolve()
+    ignore = list(ignore)
 
     notes: list[Note] = []
     for path in base.rglob("*.md"):
         if not path.is_file():
             continue
         rel_path = path.relative_to(root)
-        if is_ignored(rel_path.parent):
+        if is_ignored(rel_path.parent, ignore):
             continue
         notes.append(Note(path=path, rel_path=rel_path, size=path.stat().st_size))
 
@@ -77,7 +100,9 @@ def iter_notes(root: Path, base: Path | None = None) -> list[Note]:
     return notes
 
 
-def scan(root: Path, subdir: Path | None = None) -> FolderStats:
+def scan(
+    root: Path, subdir: Path | None = None, ignore: Iterable[str] = ()
+) -> FolderStats:
     """Build a FolderStats tree for ``root``, or for one folder inside it."""
     root = root.resolve()
     base = root if subdir is None else (root / subdir).resolve()
@@ -91,7 +116,7 @@ def scan(root: Path, subdir: Path | None = None) -> FolderStats:
     nodes: dict[Path, FolderStats] = {}
     tree = _node_for(base_rel, base_rel, nodes)
 
-    for note in iter_notes(root, base):
+    for note in iter_notes(root, base, ignore):
         folder_rel = note.rel_path.parent
         if folder_rel == Path(""):
             folder_rel = ROOT

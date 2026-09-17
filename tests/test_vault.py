@@ -61,3 +61,18 @@ def test_scan_subdir(fake_vault: Path) -> None:
 def test_scan_rejects_path_outside_vault(fake_vault: Path) -> None:
     with pytest.raises(ValueError):
         vault.scan(fake_vault, Path(".."))
+
+
+def test_ignore_by_folder_name(fake_vault: Path) -> None:
+    stats = vault.scan(fake_vault, ignore=["NE220"])
+    assert stats.note_count == 2
+    assert [c.name for c in stats.children] == ["Lectures"]
+
+
+def test_ignore_by_nested_path(fake_vault: Path) -> None:
+    stats = vault.scan(fake_vault, ignore=["Lectures/NE220"])
+    assert stats.note_count == 2
+
+
+def test_ignore_entry_that_matches_nothing(fake_vault: Path) -> None:
+    assert vault.scan(fake_vault, ignore=["Nope", ""]).note_count == 4
