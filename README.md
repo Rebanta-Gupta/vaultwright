@@ -35,6 +35,7 @@ vw scan path/to/vault -d 2         # limit tree depth
 vw check path/to/vault           # verify notes survive protect/restore
 vw kiln Lectures/w1.md           # refine one note (dry run)
 vw kiln Lectures/w1.md --write   # save it (refused if the model changed a figure)
+vw kiln Lectures/w1.md -m gemma3:4b   # override the model for one run
 
 vw config                        # show settings in use
 vw config set default_vault Job_Box
@@ -71,15 +72,34 @@ flashcards = true     # add a ## Flashcards section
 
 `vw config set <key> <value>` edits one line and leaves your comments alone.
 Settable: `vault`, `default_vault`, `kiln.model`, `kiln.output`, `kiln.layout`,
-`kiln.temperature`.
+`kiln.temperature`, `kiln.summary`, `kiln.tags`, `kiln.flashcards`.
 
 With `vault` set, the path argument becomes optional: `vw scan -s Lectures`. If it points
 at a folder of vaults, name one (`vw scan Job_Box`) or set `default_vault`.
 `vw config` prints the settings in use and where they came from.
 
+## How kiln protects your notes
+
+Before the model sees a note, everything Markdown and Obsidian treat as machinery is swapped
+for an opaque placeholder: code fences, inline code, display and inline maths, `[[wikilinks]]`,
+`![[embeds]]`, link targets, `%%` and `<!-- -->` comments, and horizontal rules. The model only
+ever edits prose. Afterwards:
+
+- a dropped or invented placeholder **rejects the note** — nothing is written
+- **figures are compared** between original and refined. If a number changed, `--write` is
+  refused unless you pass `--allow-number-changes`
+- your **indentation characters are restored**, so a three-line fix stays a three-line diff
+- anything the model adds is put in a `> [!ai]` callout **by the tool**, not by the model
+- notes under 30 words get typo fixes only — no summary, no flashcards
+- your original file is never touched
+
+`vw check` runs the protect/restore round trip over a whole vault and writes nothing, so you
+can confirm the guarantee holds on your own notes before refining anything.
+
 ## Planned
 
-- `kiln` — refine notes with a local [Ollama](https://ollama.com) model into a `refined/` folder.
+- Batch mode — refine a folder, with a cache so reruns only touch changed notes
+- Retrieval, so gap-filling draws on your other notes instead of the model's own knowledge
 
 ## A note on model output
 
