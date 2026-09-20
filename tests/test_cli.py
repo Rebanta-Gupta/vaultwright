@@ -187,3 +187,15 @@ def test_write_is_refused_when_numbers_changed(tmp_path: Path, monkeypatch) -> N
     )
     assert ok.exit_code == 0
     assert (vault / "refined" / "stats.md").exists()
+
+
+def test_kiln_without_a_note_outside_a_terminal(vaults_folder: Path, tmp_path: Path) -> None:
+    """The picker needs a terminal; in a pipe it must say so, not hang."""
+    cfg = write_config(
+        tmp_path,
+        f'vault = "{vaults_folder.as_posix()}"\ndefault_vault = "Job_Box"\n',
+    )
+    result = runner.invoke(app, ["kiln", "-c", str(cfg)])
+
+    assert result.exit_code == 1
+    assert "No note given" in flat(result.stdout)

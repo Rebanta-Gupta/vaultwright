@@ -33,7 +33,8 @@ vw scan path/to/vault            # or by path
 vw scan path/to/vault -s Lectures  # just one folder
 vw scan path/to/vault -d 2         # limit tree depth
 vw check path/to/vault           # verify notes survive protect/restore
-vw kiln Lectures/w1.md           # refine one note (dry run)
+vw kiln                          # browse the vault and pick a note
+vw kiln Lectures/w1.md           # or name one (dry run)
 vw kiln Lectures/w1.md --write   # save it (refused if the model changed a figure)
 vw kiln Lectures/w1.md -m gemma3:4b   # override the model for one run
 
@@ -41,6 +42,9 @@ vw config                        # show settings in use
 vw config set default_vault Job_Box
 vw config set kiln.model gemma3:4b
 ```
+
+`vw kiln` with no note opens a picker: arrows to move, Enter to open a folder or
+choose a note, `..` to go back up, Ctrl-C to cancel. Typing filters the current folder.
 
 `vaultwright` and `vw` are the same command.
 

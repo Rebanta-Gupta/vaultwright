@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -10,7 +11,7 @@ from rich.console import Console
 from rich.tree import Tree
 
 from vaultwright.core import config as config_module
-from vaultwright.core import llm, parse, refine, vault
+from vaultwright.core import browse, llm, parse, refine, vault
 
 app = typer.Typer(help="Tools for working with an Obsidian vault.", no_args_is_help=True)
 console = Console()
@@ -331,9 +332,55 @@ def show_diff(before: str, after: str, name: str) -> None:
         console.print(line, style=style, highlight=False, markup=False)
 
 
+def pick_note(vault_path: Path, ignore: list[str]) -> Optional[Path]:
+    """Browse the vault folder by folder and pick a note.
+
+    Arrows move, Enter opens a folder or chooses a note, ".." goes back up, and
+    Ctrl-C cancels. (Esc does not — prompt_toolkit treats it as the start of an
+    escape sequence, verified against a real terminal.) Returns the note's
+    vault-relative path, or None if the user backed out.
+    """
+    import questionary
+
+    browser = browse.Browser(vault_path, ignore)
+    if not browser.notes:
+        console.print(f"[yellow]No notes found in[/yellow] {vault_path}")
+        return None
+
+    style = questionary.Style([
+        ("qmark", "fg:cyan bold"),
+        ("pointer", "fg:cyan bold"),
+        ("highlighted", "fg:cyan bold"),
+        ("answer", "fg:green"),
+    ])
+
+    while True:
+        rows = browser.entries()
+        choices = [
+            questionary.Choice(title=row.label, value=row) for row in rows
+        ]
+        answer = questionary.select(
+            f"{browser.breadcrumb}  —  arrows to move, Enter to open, Ctrl-C to cancel",
+            choices=choices,
+            style=style,
+            qmark="›",
+            pointer="▶",
+            use_search_filter=True,
+            use_jk_keys=False,      # so j/k type into the filter instead of moving
+        ).ask()
+
+        if answer is None:          # Esc or Ctrl-C
+            return None
+        picked = browser.choose(answer)
+        if picked is not None:
+            return picked
+
+
 @app.command()
 def kiln(
-    note: Path = typer.Argument(..., help="The note to refine, inside the vault."),
+    note: Optional[Path] = typer.Argument(
+        None, help="The note to refine. Omit it to pick one by browsing the vault."
+    ),
     vault_path: Optional[Path] = typer.Option(
         None, "--vault", "-v", help="Vault path or name. Defaults to the configured vault."
     ),
@@ -351,11 +398,26 @@ def kiln(
 ) -> None:
     """Refine one note with a local Ollama model.
 
+    With no note named, browse the vault and pick one: arrows to move, Enter to
+    open a folder or choose a note, ".." to go back up, Ctrl-C to cancel.
+
     Dry run by default: it prints a diff and writes nothing. With --write the
-    result goes to <vault>/<output>/<same path>. The original is never touched.
+    result goes to a refined/ folder beside the note. The original is never touched.
     """
     cfg = load_config(config_path)
     vault_path = resolve_vault(vault_path, cfg)
+
+    if note is None:
+        if not sys.stdin.isatty():
+            console.print(
+                "[red]No note given.[/red] Name one, or run this in a terminal to "
+                "browse for it."
+            )
+            raise typer.Exit(1)
+        note = pick_note(vault_path, cfg.scan.ignore)
+        if note is None:
+            console.print("[dim]Nothing picked.[/dim]")
+            raise typer.Exit(0)
 
     source = note if note.is_absolute() else vault_path / note
     if not source.is_file():
