@@ -199,3 +199,31 @@ def test_kiln_without_a_note_outside_a_terminal(vaults_folder: Path, tmp_path: P
 
     assert result.exit_code == 1
     assert "No note given" in flat(result.stdout)
+
+
+def test_missing_questionary_gives_a_message_not_a_traceback(
+    vaults_folder: Path, monkeypatch, capsys
+) -> None:
+    """The picker's dependency is imported lazily, so it can be missing at runtime."""
+    import builtins
+
+    import typer
+
+    from vaultwright.cli import pick_note
+
+    real_import = builtins.__import__
+
+    def no_questionary(name, *args, **kwargs):
+        if name == "questionary":
+            raise ImportError("No module named 'questionary'")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", no_questionary)
+
+    with pytest.raises(typer.Exit) as exit_info:
+        pick_note(vaults_folder / "Job_Box", [])
+
+    assert exit_info.value.exit_code == 1
+    out = flat(capsys.readouterr().out)
+    assert "isn't installed" in out
+    assert "uv sync" in out

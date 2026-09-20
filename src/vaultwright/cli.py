@@ -340,7 +340,17 @@ def pick_note(vault_path: Path, ignore: list[str]) -> Optional[Path]:
     escape sequence, verified against a real terminal.) Returns the note's
     vault-relative path, or None if the user backed out.
     """
-    import questionary
+    # Imported here, not at module level: questionary pulls in prompt_toolkit,
+    # which would slow the start of every other command.
+    try:
+        import questionary
+    except ImportError as err:
+        console.print(
+            "[red]The picker needs questionary, which isn't installed.[/red]\n"
+            "[dim]Run 'uv sync' (or 'pip install questionary'), or name the note "
+            "directly: vw kiln <note>[/dim]"
+        )
+        raise typer.Exit(1) from err
 
     browser = browse.Browser(vault_path, ignore)
     if not browser.notes:

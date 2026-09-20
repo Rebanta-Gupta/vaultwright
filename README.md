@@ -44,7 +44,9 @@ vw config set kiln.model gemma3:4b
 ```
 
 `vw kiln` with no note opens a picker: arrows to move, Enter to open a folder or
-choose a note, `..` to go back up, Ctrl-C to cancel. Typing filters the current folder.
+choose a note, `..` to go back up, Ctrl-C to cancel. Typing filters the current level.
+The first row, **Search all notes**, switches to a flat list of every note by full path —
+type any part of a name to find it without drilling down.
 
 `vaultwright` and `vw` are the same command.
 

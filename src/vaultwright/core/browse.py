@@ -13,13 +13,14 @@ from pathlib import Path
 from vaultwright.core import vault
 
 UP = ".."
+SEARCH = "Search all notes"
 
 
 @dataclass(frozen=True)
 class Entry:
     """One row in the picker."""
 
-    kind: str          # "up" | "folder" | "note"
+    kind: str          # "search" | "up" | "folder" | "note"
     rel_path: Path     # vault-relative; for "up", the folder it leads to
     label: str         # what the user sees
     note_count: int = 0
@@ -36,6 +37,7 @@ class Browser:
         self.root = root.resolve()
         self.notes = vault.iter_notes(self.root, ignore=ignore)
         self.current = Path(start) if start else vault.ROOT
+        self.searching = False   # flat list of every note, filtered by typing
 
     @property
     def at_root(self) -> bool:
@@ -44,19 +46,34 @@ class Browser:
     @property
     def breadcrumb(self) -> str:
         """Where we are, for the prompt's question line."""
+        if self.searching:
+            return f"{self.root.name} — all notes"
         if self.at_root:
             return self.root.name
         return f"{self.root.name}/{self.current.as_posix()}"
 
     def entries(self) -> list[Entry]:
-        """Rows for the current folder: up, then subfolders, then notes."""
+        """Rows to show: either every note, or this folder's contents."""
+        if self.searching:
+            return self._search_rows()
+
         rows: list[Entry] = []
+        if self.notes:
+            rows.append(Entry("search", self.current, f"{SEARCH} ({len(self.notes)})"))
         if not self.at_root:
             parent = self.current.parent if self.current.parent != Path("") else vault.ROOT
             rows.append(Entry("up", parent, f"{UP}/"))
 
         rows.extend(self._folders())
         rows.extend(self._notes_here())
+        return rows
+
+    def _search_rows(self) -> list[Entry]:
+        """Every note in the vault, by full path, for typing to filter."""
+        rows = [Entry("up", self.current, f"{UP}/  (back to browsing)")]
+        rows.extend(
+            Entry("note", note.rel_path, note.rel_path.as_posix()) for note in self.notes
+        )
         return rows
 
     def _folders(self) -> list[Entry]:
@@ -101,8 +118,18 @@ class Browser:
         return Path(name) if self.at_root else self.current / name
 
     def choose(self, entry: Entry) -> Path | None:
-        """Act on a row. Returns a note's path if one was picked, else None."""
+        """Act on a row. Returns a note's path if one was picked, else None.
+
+        A note ends the browse. A folder descends. "Search all notes" switches to
+        the flat list, and its ".." switches back to where you were.
+        """
         if entry.is_note:
             return entry.rel_path
+        if entry.kind == "search":
+            self.searching = True
+            return None
+        if self.searching:          # the "back to browsing" row
+            self.searching = False
+            return None
         self.current = entry.rel_path
         return None
