@@ -76,3 +76,28 @@ def test_ignore_by_nested_path(fake_vault: Path) -> None:
 
 def test_ignore_entry_that_matches_nothing(fake_vault: Path) -> None:
     assert vault.scan(fake_vault, ignore=["Nope", ""]).note_count == 4
+
+
+@pytest.fixture
+def vaults_folder(tmp_path: Path) -> Path:
+    """A folder holding two vaults and one ordinary folder."""
+    for name in ("Job_Box", "Second_Brain"):
+        (tmp_path / name / ".obsidian").mkdir(parents=True)
+        (tmp_path / name / "note.md").write_text("hi")
+    (tmp_path / "Not a vault").mkdir()
+    return tmp_path
+
+
+def test_find_vaults(vaults_folder: Path) -> None:
+    assert [v.name for v in vault.find_vaults(vaults_folder)] == ["Job_Box", "Second_Brain"]
+
+
+def test_is_vault_root(vaults_folder: Path) -> None:
+    assert vault.is_vault_root(vaults_folder)
+    # a vault is not a root, even though it sits inside one
+    assert not vault.is_vault_root(vaults_folder / "Job_Box")
+    assert not vault.is_vault_root(vaults_folder / "Not a vault")
+
+
+def test_find_vaults_on_a_missing_folder(tmp_path: Path) -> None:
+    assert vault.find_vaults(tmp_path / "nope") == []

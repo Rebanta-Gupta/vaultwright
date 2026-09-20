@@ -51,6 +51,25 @@ def is_vault(path: Path) -> bool:
     return (path / ".obsidian").is_dir()
 
 
+def find_vaults(root: Path) -> list[Path]:
+    """Vaults sitting directly inside ``root``, sorted by name.
+
+    An Obsidian "vaults folder" is just a folder whose children are vaults, so
+    detection is: which immediate subfolders have a .obsidian of their own.
+    """
+    if not root.is_dir():
+        return []
+    return sorted(
+        (child for child in root.iterdir() if child.is_dir() and is_vault(child)),
+        key=lambda p: p.name.lower(),
+    )
+
+
+def is_vault_root(path: Path) -> bool:
+    """True if this folder is not itself a vault but holds at least one."""
+    return not is_vault(path) and bool(find_vaults(path))
+
+
 def is_ignored(rel_path: Path, ignore: Iterable[str] = ()) -> bool:
     """True if this vault-relative folder should be skipped.
 
